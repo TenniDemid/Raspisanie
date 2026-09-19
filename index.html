@@ -1,0 +1,761 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover">
+<title>Расписание</title>
+<meta name="theme-color" content="#14161A">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Расписание">
+<meta name="mobile-web-app-capable" content="yes">
+<link rel="manifest" href="manifest.json">
+<link rel="icon" href="icon.png">
+<link rel="apple-touch-icon" href="icon.png">
+<style>
+  :root{
+    --bg:#14161A;
+    --surface:#1B1E23;
+    --surface-2:#22262C;
+    --line:#2A2E35;
+    --text:#F2F0EA;
+    --text-muted:#8A8F98;
+    --text-faint:#5B6068;
+    --week1:#E8A33D;
+    --week1-soft:rgba(232,163,61,.14);
+    --week2:#4FB8A8;
+    --week2-soft:rgba(79,184,168,.14);
+    --danger:#D9695F;
+    --radius-lg:22px;
+    --radius-md:14px;
+    --radius-sm:10px;
+    --font-sans:-apple-system,BlinkMacSystemFont,"SF Pro Display","Segoe UI",Roboto,sans-serif;
+    --font-mono:ui-monospace,"SF Mono","Roboto Mono","JetBrains Mono",Menlo,Consolas,monospace;
+    --accent:var(--week1);
+    --accent-soft:var(--week1-soft);
+  }
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
+  html,body{height:100%;}
+  body{
+    margin:0;
+    background:var(--bg);
+    color:var(--text);
+    font-family:var(--font-sans);
+    -webkit-font-smoothing:antialiased;
+    overscroll-behavior-y:none;
+  }
+  #app{
+    max-width:480px;
+    margin:0 auto;
+    min-height:100vh;
+    padding:calc(env(safe-area-inset-top,0px) + 18px) 20px calc(env(safe-area-inset-bottom,0px) + 40px);
+    display:flex;
+    flex-direction:column;
+  }
+  button{font-family:inherit;color:inherit;background:none;border:none;cursor:pointer;}
+  button:focus-visible,summary:focus-visible,input:focus-visible,textarea:focus-visible,select:focus-visible{
+    outline:2px solid var(--accent);outline-offset:2px;
+  }
+  ::selection{background:var(--accent-soft);}
+
+  /* top bar */
+  .topbar{display:flex;align-items:center;justify-content:space-between;margin-bottom:22px;}
+  .topbar h1{font-size:17px;font-weight:600;margin:0;letter-spacing:.01em;color:var(--text-muted);}
+  .icon-btn{width:38px;height:38px;display:flex;align-items:center;justify-content:center;border-radius:50%;transition:background .15s ease;}
+  .icon-btn:active{background:var(--surface-2);}
+  .icon-btn svg{width:19px;height:19px;stroke:var(--text-muted);}
+
+  /* hero */
+  .hero{display:flex;align-items:center;justify-content:space-between;gap:16px;margin-bottom:20px;opacity:0;transform:translateY(6px);animation:settleIn .5s cubic-bezier(.2,.8,.2,1) .05s forwards;}
+  .day-name{font-size:26px;font-weight:650;letter-spacing:-.01em;line-height:1.15;}
+  .date-line{font-family:var(--font-mono);font-size:14px;color:var(--text-muted);margin-top:4px;}
+  .week-badge{
+    position:relative;
+    width:84px;height:84px;border-radius:26px;
+    display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;
+    background:var(--accent-soft);
+    border:1.5px solid color-mix(in srgb, var(--accent) 45%, transparent);
+    transition:background .35s ease,border-color .35s ease;
+    perspective:600px;
+    flex-shrink:0;
+  }
+  .week-badge::after{
+    content:"";position:absolute;inset:-6px;border-radius:30px;
+    box-shadow:0 0 0 0 var(--accent-soft);
+    animation:breathe 3.2s ease-in-out infinite;
+  }
+  .week-badge-inner{display:flex;flex-direction:column;align-items:center;gap:2px;transition:transform .5s cubic-bezier(.2,.8,.2,1);}
+  .week-badge.flip .week-badge-inner{animation:flip .55s cubic-bezier(.3,.6,.3,1);}
+  .week-label{font-size:10px;letter-spacing:.06em;color:var(--text-muted);text-transform:lowercase;}
+  .week-num{font-family:var(--font-mono);font-size:30px;font-weight:600;color:var(--accent);line-height:1;}
+
+  @keyframes settleIn{to{opacity:1;transform:translateY(0);}}
+  @keyframes breathe{
+    0%,100%{box-shadow:0 0 0 0 var(--accent-soft);}
+    50%{box-shadow:0 0 14px 3px var(--accent-soft);}
+  }
+  @keyframes flip{
+    0%{transform:rotateY(0);}
+    50%{transform:rotateY(90deg);}
+    100%{transform:rotateY(0);}
+  }
+  @keyframes rowIn{
+    from{opacity:0;transform:translateY(7px);}
+    to{opacity:1;transform:translateY(0);}
+  }
+
+  /* status row */
+  .status-row{
+    display:flex;align-items:center;justify-content:space-between;
+    background:var(--surface);border-radius:var(--radius-sm);
+    padding:10px 14px;margin-bottom:16px;font-size:13px;color:var(--text-muted);
+    animation:settleIn .3s ease forwards;
+  }
+  .status-row button{color:var(--accent);font-weight:600;font-size:13px;}
+  .status-row.hidden{display:none;}
+
+  /* day strip */
+  .daystrip{display:flex;gap:6px;margin-bottom:18px;opacity:0;transform:translateY(6px);animation:settleIn .5s cubic-bezier(.2,.8,.2,1) .12s forwards;}
+  .day-chip{
+    flex:1;padding:9px 0;border-radius:var(--radius-sm);text-align:center;
+    font-size:13px;font-weight:600;color:var(--text-muted);
+    background:var(--surface);
+    transition:background .2s ease,color .2s ease,transform .15s ease;
+  }
+  .day-chip.today{color:var(--text-faint);}
+  .day-chip.selected{background:var(--accent-soft);color:var(--accent);transform:scale(1.04);}
+  .day-chip.today.selected::after{content:"";display:block;width:4px;height:4px;border-radius:50%;background:var(--accent);margin:5px auto 0;}
+  .day-chip:active{transform:scale(.96);}
+
+  /* class list */
+  .classlist{display:flex;flex-direction:column;flex:1;}
+  .class-row{
+    padding:14px 0;border-bottom:1px solid var(--line);display:flex;gap:14px;align-items:baseline;
+    opacity:0;animation:rowIn .34s cubic-bezier(.2,.8,.2,1) forwards;
+  }
+  .class-row:last-child{border-bottom:none;}
+  .class-time{font-family:var(--font-mono);font-size:13px;flex-shrink:0;min-width:92px;}
+  .class-time .t-start{color:var(--accent);font-weight:700;}
+  .class-time .t-end{color:var(--text-faint);font-weight:400;}
+  .class-body .class-subject{font-size:15px;font-weight:600;line-height:1.35;}
+  .class-body .class-room{font-size:13px;color:var(--text-muted);margin-top:2px;}
+  .empty-state{padding:50px 10px;text-align:center;color:var(--text-muted);opacity:0;animation:rowIn .34s cubic-bezier(.2,.8,.2,1) forwards;}
+  .empty-state p{margin:0 0 14px;font-size:14px;}
+  .empty-state button{color:var(--accent);font-weight:600;font-size:14px;}
+
+  /* sheet */
+  .backdrop{position:fixed;inset:0;background:rgba(0,0,0,.55);opacity:0;pointer-events:none;transition:opacity .25s ease;z-index:10;}
+  .backdrop.show{opacity:1;pointer-events:auto;}
+  .sheet{
+    position:fixed;left:0;right:0;bottom:0;z-index:11;
+    max-width:480px;margin:0 auto;
+    background:var(--surface);
+    border-radius:24px 24px 0 0;
+    padding:10px 20px calc(env(safe-area-inset-bottom,0px) + 26px);
+    max-height:86vh;overflow-y:auto;
+    transform:translateY(100%);
+    transition:transform .32s cubic-bezier(.22,.75,.25,1);
+  }
+  .sheet.show{transform:translateY(0);}
+  .sheet-handle{width:36px;height:4px;border-radius:2px;background:var(--line);margin:6px auto 16px;}
+  .sheet-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:18px;}
+  .sheet-header h2{font-size:18px;margin:0;}
+  .sheet-section{margin-bottom:26px;}
+  .sheet-section h3{font-size:13px;color:var(--text-muted);text-transform:none;font-weight:600;margin:0 0 10px;}
+
+  .week-toggle{display:flex;gap:8px;}
+  .week-toggle button{
+    flex:1;padding:14px 0;border-radius:var(--radius-md);
+    background:var(--surface-2);font-weight:700;font-size:15px;color:var(--text-muted);
+    border:1.5px solid transparent;transition:all .18s ease;
+  }
+  .week-toggle button.on1.active{background:var(--week1-soft);color:var(--week1);border-color:color-mix(in srgb, var(--week1) 45%, transparent);}
+  .week-toggle button.on2.active{background:var(--week2-soft);color:var(--week2);border-color:color-mix(in srgb, var(--week2) 45%, transparent);}
+  .calib-note{font-size:12px;color:var(--text-faint);margin-top:8px;}
+
+  .tabbar{display:flex;gap:6px;margin-bottom:14px;}
+  .tabbar button{flex:1;padding:9px 0;border-radius:var(--radius-sm);font-size:13px;font-weight:600;background:var(--surface-2);color:var(--text-muted);transition:all .18s ease;}
+  .tabbar button.active.t1{background:var(--week1-soft);color:var(--week1);}
+  .tabbar button.active.t2{background:var(--week2-soft);color:var(--week2);}
+
+  details.day-acc{border-bottom:1px solid var(--line);}
+  details.day-acc:last-child{border-bottom:none;}
+  details.day-acc summary{
+    list-style:none;padding:13px 2px;display:flex;justify-content:space-between;align-items:center;cursor:pointer;font-size:14px;font-weight:600;
+  }
+  details.day-acc summary::-webkit-details-marker{display:none;}
+  details.day-acc summary .cnt{color:var(--text-faint);font-weight:400;font-size:12px;}
+  details.day-acc summary::after{content:"";width:8px;height:8px;border-right:1.5px solid var(--text-faint);border-bottom:1.5px solid var(--text-faint);transform:rotate(45deg);transition:transform .2s ease;margin-left:8px;}
+  details.day-acc[open] summary::after{transform:rotate(-135deg);}
+  .acc-body{padding:2px 2px 16px;}
+
+  .edit-row-wrap{border:1px solid var(--line);border-radius:var(--radius-md);padding:10px;margin-bottom:8px;position:relative;}
+  .edit-row-wrap .rm{position:absolute;top:8px;right:8px;width:24px;height:24px;display:flex;align-items:center;justify-content:center;color:var(--text-faint);}
+  .edit-row-wrap .rm svg{width:13px;height:13px;stroke:currentColor;}
+
+  .edit-row{display:grid;grid-template-columns:56px 56px 1fr;gap:6px;margin-bottom:6px;align-items:center;padding-right:28px;}
+  .edit-row input{
+    background:var(--surface-2);border:1px solid var(--line);border-radius:var(--radius-sm);
+    padding:9px 6px;font-size:13px;color:var(--text);width:100%;min-width:0;font-family:var(--font-mono);text-align:center;
+  }
+  .edit-row input.subject-input{font-family:var(--font-sans);text-align:left;padding:9px 10px;}
+
+  .edit-row-2{display:grid;grid-template-columns:1fr 112px;gap:6px;}
+  .edit-row-2 input,.edit-row-2 select{
+    background:var(--surface-2);border:1px solid var(--line);border-radius:var(--radius-sm);
+    padding:8px 10px;font-size:12px;color:var(--text-muted);width:100%;min-width:0;font-family:var(--font-sans);
+  }
+
+  .add-class-btn{width:100%;padding:10px;border-radius:var(--radius-sm);background:var(--surface-2);color:var(--accent);font-size:13px;font-weight:600;margin-top:2px;}
+
+  .backup-textarea{width:100%;min-height:90px;background:var(--surface-2);border:1px solid var(--line);border-radius:var(--radius-sm);color:var(--text-muted);font-family:var(--font-mono);font-size:11px;padding:10px;resize:vertical;}
+  .backup-actions{display:flex;gap:8px;margin-top:8px;}
+  .backup-actions button{flex:1;padding:10px;border-radius:var(--radius-sm);background:var(--surface-2);font-size:13px;font-weight:600;color:var(--text);}
+
+  .toast{
+    position:fixed;left:50%;bottom:calc(env(safe-area-inset-bottom,0px) + 24px);
+    transform:translate(-50%,10px);background:var(--surface-2);color:var(--text);
+    padding:11px 18px;border-radius:100px;font-size:13px;font-weight:600;
+    box-shadow:0 8px 24px rgba(0,0,0,.35);opacity:0;pointer-events:none;
+    transition:opacity .2s ease,transform .2s ease;z-index:20;
+  }
+  .toast.show{opacity:1;transform:translate(-50%,0);}
+
+  .hidden{display:none !important;}
+
+  @media (prefers-reduced-motion: reduce){
+    .hero,.daystrip,.status-row,.class-row,.empty-state,.week-badge::after,.week-badge.flip .week-badge-inner{
+      animation:none !important;transition:none !important;opacity:1 !important;transform:none !important;
+    }
+  }
+</style>
+</head>
+<body>
+<div id="app">
+  <div class="topbar">
+    <h1>Расписание</h1>
+    <button class="icon-btn" id="openSettings" aria-label="Настройки">
+      <svg viewBox="0 0 24 24" fill="none" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 15a3 3 0 100-6 3 3 0 000 6z"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 11-2.83 2.83l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 11-4 0v-.09a1.65 1.65 0 00-1-1.51 1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 11-2.83-2.83l.06-.06a1.65 1.65 0 00.33-1.82 1.65 1.65 0 00-1.51-1H3a2 2 0 110-4h.09a1.65 1.65 0 001.51-1 1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 112.83-2.83l.06.06a1.65 1.65 0 001.82.33H9a1.65 1.65 0 001-1.51V3a2 2 0 114 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 112.83 2.83l-.06.06a1.65 1.65 0 00-.33 1.82V9a1.65 1.65 0 001.51 1H21a2 2 0 110 4h-.09a1.65 1.65 0 00-1.51 1z"/></svg>
+    </button>
+  </div>
+
+  <section class="hero">
+    <div class="hero-text">
+      <div class="day-name" id="dayName">—</div>
+      <div class="date-line" id="dateLine">—</div>
+    </div>
+    <button class="week-badge" id="weekBadge" aria-label="Посмотреть другую неделю">
+      <span class="week-badge-inner">
+        <span class="week-label">неделя</span>
+        <span class="week-num" id="weekNum">1</span>
+      </span>
+    </button>
+  </section>
+
+  <div class="status-row hidden" id="statusRow">
+    <span id="statusText"></span>
+    <button id="backToToday">К сегодня</button>
+  </div>
+
+  <nav class="daystrip" id="dayStrip"></nav>
+
+  <main class="classlist" id="classList"></main>
+</div>
+
+<div class="backdrop" id="backdrop"></div>
+<div class="sheet" id="sheet" role="dialog" aria-label="Настройки расписания">
+  <div class="sheet-handle"></div>
+  <div class="sheet-header">
+    <h2>Настройки</h2>
+    <button class="icon-btn" id="closeSettings" aria-label="Закрыть">
+      <svg viewBox="0 0 24 24" fill="none" stroke-width="1.8" stroke-linecap="round"><path d="M18 6L6 18M6 6l12 12"/></svg>
+    </button>
+  </div>
+
+  <div class="sheet-section">
+    <h3>Какая сейчас неделя</h3>
+    <div class="week-toggle">
+      <button class="on1" id="setWeek1">1</button>
+      <button class="on2" id="setWeek2">2</button>
+    </div>
+    <div class="calib-note" id="calibNote"></div>
+  </div>
+
+  <div class="sheet-section">
+    <h3>Расписание по неделям</h3>
+    <div class="tabbar">
+      <button class="t1" id="editTab1">Неделя 1</button>
+      <button class="t2" id="editTab2">Неделя 2</button>
+    </div>
+    <div id="dayAccordions"></div>
+    <button id="restoreDefault" style="margin-top:12px;color:var(--text-faint);font-size:12px;text-decoration:underline;">Восстановить исходное расписание из файла</button>
+  </div>
+
+  <div class="sheet-section">
+    <details>
+      <summary style="cursor:pointer;color:var(--text-muted);font-size:13px;font-weight:600;list-style:none;">Резервная копия</summary>
+      <div style="margin-top:12px;">
+        <textarea class="backup-textarea" id="backupOut" readonly></textarea>
+        <div class="backup-actions">
+          <button id="copyBackup">Скопировать</button>
+        </div>
+        <textarea class="backup-textarea" id="backupIn" placeholder="Вставь сюда скопированный текст, чтобы восстановить" style="margin-top:14px;"></textarea>
+        <div class="backup-actions">
+          <button id="importBackup">Импортировать</button>
+        </div>
+      </div>
+    </details>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+(function(){
+  "use strict";
+  var STORAGE_KEY = "scheduleAppData_v1";
+  var DAY_NAMES = ["воскресенье","понедельник","вторник","среда","четверг","пятница","суббота"];
+  var DAY_SHORT = ["Вс","Пн","Вт","Ср","Чт","Пт","Сб"];
+  var MONTHS_GEN = ["января","февраля","марта","апреля","мая","июня","июля","августа","сентября","октября","ноября","декабря"];
+  var EDIT_DAYS = [1,2,3,4,5,6]; // Mon..Sat
+  var TYPE_OPTIONS = ["","лекция","практика","лабораторная"];
+  var TIME_SLOTS = [
+    {start:"12:00", end:"13:35"},
+    {start:"13:55", end:"15:30"},
+    {start:"15:40", end:"17:15"},
+    {start:"17:45", end:"19:20"}
+  ];
+
+  function pad(n){return n<10?"0"+n:""+n;}
+  function todayISO(){
+    var d=new Date();
+    return d.getFullYear()+"-"+pad(d.getMonth()+1)+"-"+pad(d.getDate());
+  }
+  function getMonday(date){
+    var d=new Date(date);
+    var day=d.getDay();
+    var diff=(day===0?-6:1)-day;
+    d.setDate(d.getDate()+diff);
+    d.setHours(0,0,0,0);
+    return d;
+  }
+  function currentWeekFromCalibration(calib){
+    var calMonday=getMonday(new Date(calib.date+"T00:00:00"));
+    var todayMonday=getMonday(new Date());
+    var diffDays=Math.round((todayMonday-calMonday)/86400000);
+    var diffWeeks=Math.round(diffDays/7);
+    var even=(diffWeeks%2+2)%2===0;
+    return even?calib.week:(calib.week===1?2:1);
+  }
+
+  var BAKED_SCHEDULE = {"1":{"1":[{"start":"12:00","end":"13:35","subject":"Элементы автоматизированного электропривода","room":"ст.пр. Беляцкая А.П., 704 к. 8","type":""},{"start":"13:55","end":"15:30","subject":"Элементы автоматизированного электропривода","room":"ст.пр. Беляцкая А.П., 704 к. 8","type":""},{"start":"15:40","end":"17:15","subject":"Теория электропривода","room":"ст.пр. Нитиевский С.А., 704 к. 8","type":""},{"start":"17:45","end":"19:20","subject":"Физическая культура","room":"","type":""}],"2":[{"start":"13:55","end":"15:30","subject":"Экономика предприятия","room":"ст.пр. Лапченко Д.А., 701 к. 8","type":""},{"start":"15:40","end":"17:15","subject":"Системы управления электроприводами — 1 подгруппа","room":"ст.пр. Миронович А.В., 16б к. 11А","type":""}],"3":[{"start":"12:00","end":"13:35","subject":"1 подгруппа: Моделирование систем электропривода","room":"ст.пр. Александровский С.В., 420 к. 11А","type":""},{"start":"12:00","end":"13:35","subject":"2 подгруппа: Микропроцессорные средства в автоматизированном электроприводе","room":"доц. Опейко О.Ф., 421 к. 11А","type":""},{"start":"13:55","end":"15:30","subject":"1 подгруппа: Элементы автоматизированного электропривода","room":"ст.пр. Беляцкая А.П., 108 к. 11А","type":""},{"start":"13:55","end":"15:30","subject":"2 подгруппа: Теория электропривода","room":"ст.пр. Нитиевский С.А., 16а к. 11А","type":""},{"start":"15:40","end":"17:15","subject":"Консультация по курсовой работе \"Микропроцессорные средства в автоматизированном электроприводе\"","room":"доц. Опейко О.Ф., 508 к. 11А","type":""},{"start":"17:45","end":"19:20","subject":"Кураторский час","room":"ст.пр. Беляцкая А.П., 16б к. 11А","type":""}],"4":[{"start":"12:00","end":"13:35","subject":"Организация и управление предприятием","room":"ст.пр. Левковская А.В., 445 к. 1","type":""},{"start":"13:55","end":"15:30","subject":"Организация и управление предприятием","room":"ст.пр. Левковская А.В., 436 к. 1","type":""},{"start":"15:40","end":"17:15","subject":"Моделирование систем электропривода","room":"ст.пр. Александровский С.В., 436 к. 1","type":""}],"5":[{"start":"12:00","end":"13:35","subject":"Консультация по курсовой работе \"Элементы автоматизированного электропривода\"","room":"ст.пр. Беляцкая А.П., 508 к. 11","type":""},{"start":"13:55","end":"15:30","subject":"Элементы автоматизированного электропривода","room":"ст.пр. Беляцкая А.П., 108 к. 11А","type":""},{"start":"15:40","end":"17:15","subject":"Системы управления электроприводами","room":"ст.пр. Миронович А.В., 436 к. 1","type":""},{"start":"17:45","end":"19:20","subject":"Системы управления электроприводами","room":"ст.пр. Миронович А.В., 16б к. 11а","type":""}],"6":[{"start":"08:00","end":"09:35","subject":"Экономика предприятия","room":"ст.пр. Лапченко Д.А., 220 к. 6","type":""},{"start":"09:55","end":"11:30","subject":"1 подгруппа: Микропроцессорные средства в автоматизированном электроприводе","room":"доц. Опейко О.Ф., 421 к. 11А","type":""},{"start":"09:55","end":"11:30","subject":"2 подгруппа: Моделирование систем электропривода","room":"ст.пр. Александровский С.В., 420 к. 11А","type":""},{"start":"11:40","end":"13:15","subject":"Микропроцессорные средства в автоматизированном электроприводе","room":"доц. Опейко О.Ф., 208 к. 6","type":""}]},"2":{"1":[{"start":"12:00","end":"13:35","subject":"Элементы автоматизированного электропривода","room":"ст.пр. Беляцкая А.П., 704 к. 8","type":""},{"start":"13:55","end":"15:30","subject":"Теория электропривода","room":"ст.пр. Нитиевский С.А., 704 к. 8","type":""},{"start":"15:40","end":"17:15","subject":"Теория электропривода","room":"ст.пр. Нитиевский С.А., 704 к. 8","type":""},{"start":"17:45","end":"19:20","subject":"Физическая культура","room":"","type":""}],"2":[{"start":"12:00","end":"13:35","subject":"Микропроцессорные средства в автоматизированном электроприводе","room":"доц. Опейко О.Ф., 701 к. 8","type":""},{"start":"13:55","end":"15:30","subject":"Экономика предприятия","room":"ст.пр. Лапченко Д.А., 701 к. 8","type":""},{"start":"15:40","end":"17:15","subject":"Системы управления электроприводами — 2 подгруппа","room":"ст.пр. Миронович А.В., 16б к. 11А","type":""}],"3":[{"start":"12:00","end":"13:35","subject":"1 подгруппа: Моделирование систем электропривода","room":"ст.пр. Александровский С.В., 420 к. 11А","type":""},{"start":"12:00","end":"13:35","subject":"2 подгруппа: Микропроцессорные средства в автоматизированном электроприводе","room":"доц. Опейко О.Ф., 421 к. 11А","type":""},{"start":"13:55","end":"15:30","subject":"1 подгруппа: Теория электропривода","room":"ст.пр. Нитиевский С.А., 16а к. 11А","type":""},{"start":"13:55","end":"15:30","subject":"2 подгруппа: Элементы автоматизированного электропривода","room":"ст.пр. Беляцкая А.П., 108 к. 11А","type":""},{"start":"15:40","end":"17:15","subject":"Консультация по курсовой работе \"Микропроцессорные средства в автоматизированном электроприводе\"","room":"доц. Опейко О.Ф., 508 к. 11А","type":""},{"start":"17:45","end":"19:20","subject":"Кураторский час","room":"ст.пр. Беляцкая А.П., 16б к. 11А","type":""}],"4":[{"start":"13:55","end":"15:30","subject":"Организация и управление предприятием","room":"ст.пр. Левковская А.В., 436 к. 1","type":""},{"start":"15:40","end":"17:15","subject":"Моделирование систем электропривода","room":"ст.пр. Александровский С.В., 436 к. 1","type":""}],"5":[{"start":"12:00","end":"13:35","subject":"Консультация по курсовой работе \"Элементы автоматизированного электропривода\"","room":"ст.пр. Беляцкая А.П., 508 к. 11","type":""},{"start":"13:55","end":"15:30","subject":"Теория электропривода","room":"ст.пр. Нитиевский С.А., 166 к. 11А","type":""},{"start":"15:40","end":"17:15","subject":"Системы управления электроприводами","room":"ст.пр. Миронович А.В., 436 к. 1","type":""}],"6":[{"start":"08:00","end":"09:35","subject":"Экономика предприятия","room":"ст.пр. Лапченко Д.А., 220 к. 6","type":""},{"start":"09:55","end":"11:30","subject":"1 подгруппа: Микропроцессорные средства в автоматизированном электроприводе","room":"доц. Опейко О.Ф., 421 к. 11А","type":""},{"start":"09:55","end":"11:30","subject":"2 подгруппа: Моделирование систем электропривода","room":"ст.пр. Александровский С.В., 420 к. 11А","type":""},{"start":"11:40","end":"13:15","subject":"Микропроцессорные средства в автоматизированном электроприводе","room":"доц. Опейко О.Ф., 208 к. 6","type":""}]}};
+  function defaultData(){
+    return {calibration:{date:todayISO(),week:1},schedule:JSON.parse(JSON.stringify(BAKED_SCHEDULE))};
+  }
+
+  function normalizeItem(it){
+    it = it||{};
+    var start = it.start, end = it.end;
+    if((start===undefined||start==="") && it.time){
+      var parts = String(it.time).split(/[–—-]/);
+      start = (parts[0]||"").trim();
+      end = (parts[1]||"").trim();
+    }
+    return {start:start||"", end:end||"", subject:it.subject||"", room:it.room||"", type:it.type||""};
+  }
+  function migrateData(d){
+    [1,2].forEach(function(w){
+      if(!d.schedule[w]) d.schedule[w]={};
+      EDIT_DAYS.forEach(function(dn){
+        var arr = d.schedule[w][dn]||[];
+        d.schedule[w][dn] = arr.map(normalizeItem);
+      });
+    });
+    return d;
+  }
+
+  var isFirstRun = !localStorage.getItem(STORAGE_KEY);
+
+  function load(){
+    try{
+      var raw=localStorage.getItem(STORAGE_KEY);
+      if(!raw) return defaultData();
+      var parsed=JSON.parse(raw);
+      if(!parsed.schedule||!parsed.calibration) return defaultData();
+      return parsed;
+    }catch(e){return defaultData();}
+  }
+  function save(){
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+  }
+
+  var data = migrateData(load());
+  save();
+
+  var state={
+    selectedDay: (new Date().getDay()===0?1:new Date().getDay()),
+    viewingWeek: currentWeekFromCalibration(data.calibration),
+    editTab: currentWeekFromCalibration(data.calibration)
+  };
+  var actualWeek = currentWeekFromCalibration(data.calibration);
+  var todayDayNum = new Date().getDay(); // 0=Sun..6=Sat
+
+  var $ = function(id){return document.getElementById(id);};
+
+  function applyAccent(week){
+    document.documentElement.style.setProperty("--accent", week===1?"#E8A33D":"#4FB8A8");
+    document.documentElement.style.setProperty("--accent-soft", week===1?"var(--week1-soft)":"var(--week2-soft)");
+  }
+  function capitalize(s){return s.charAt(0).toUpperCase()+s.slice(1);}
+
+  function renderHero(){
+    $("dayName").textContent = capitalize(DAY_NAMES[state.selectedDay]);
+    var isRealToday = (state.selectedDay===todayDayNum && state.viewingWeek===actualWeek);
+    if(isRealToday){
+      var d=new Date();
+      $("dateLine").textContent = d.getDate()+" "+MONTHS_GEN[d.getMonth()];
+    }else{
+      $("dateLine").textContent = "не сегодня";
+    }
+    $("weekNum").textContent = state.viewingWeek;
+    applyAccent(state.viewingWeek);
+    var badge=$("weekBadge");
+    badge.setAttribute("aria-label","Сейчас показана неделя "+state.viewingWeek+". Нажми, чтобы посмотреть другую.");
+  }
+
+  function renderStatusRow(){
+    var row=$("statusRow");
+    var isRealToday = (state.selectedDay===todayDayNum && state.viewingWeek===actualWeek);
+    if(isRealToday){
+      row.classList.add("hidden");
+      return;
+    }
+    row.classList.remove("hidden");
+    var parts=[];
+    if(state.viewingWeek!==actualWeek) parts.push("неделя "+state.viewingWeek+" — не текущая");
+    if(state.selectedDay!==todayDayNum) parts.push("не сегодня");
+    $("statusText").textContent = parts.join(" · ");
+  }
+
+  function renderDayStrip(){
+    var strip=$("dayStrip");
+    strip.innerHTML="";
+    EDIT_DAYS.forEach(function(dNum){
+      var btn=document.createElement("button");
+      btn.className="day-chip";
+      if(dNum===todayDayNum) btn.classList.add("today");
+      if(dNum===state.selectedDay) btn.classList.add("selected");
+      btn.textContent=DAY_SHORT[dNum];
+      btn.setAttribute("data-day",dNum);
+      btn.addEventListener("click",function(){
+        state.selectedDay=dNum;
+        renderHero();
+        renderDayStrip();
+        renderClassList();
+        renderStatusRow();
+      });
+      strip.appendChild(btn);
+    });
+  }
+
+  function renderClassList(){
+    var list=$("classList");
+    var items=(data.schedule[state.viewingWeek]&&data.schedule[state.viewingWeek][state.selectedDay])||[];
+    var html="";
+    if(items.length===0){
+      html='<div class="empty-state"><p>Занятий нет</p><button id="emptyAddBtn">Добавить в настройках</button></div>';
+    }else{
+      items.forEach(function(it,idx){
+        var meta=[];
+        if(it.room) meta.push(escapeHtml(it.room));
+        if(it.type) meta.push(escapeHtml(it.type));
+        var metaHtml = meta.length? '<div class="class-room">'+meta.join(" · ")+'</div>' : '';
+        html+='<div class="class-row" style="animation-delay:'+(idx*35)+'ms">'+
+                '<div class="class-time"><span class="t-start">'+escapeHtml(it.start||"")+'</span>'+
+                (it.end?'<span class="t-end">–'+escapeHtml(it.end)+'</span>':'')+'</div>'+
+                '<div class="class-body"><div class="class-subject">'+escapeHtml(it.subject||"Без названия")+'</div>'+metaHtml+'</div>'+
+              '</div>';
+      });
+    }
+    list.innerHTML=html;
+    var eb=$("emptyAddBtn");
+    if(eb){
+      eb.addEventListener("click",function(){
+        state.editTab=state.viewingWeek;
+        openSettings();
+        renderEditor();
+        var det=document.querySelector('.day-acc[data-day="'+state.selectedDay+'"]');
+        if(det){det.open=true; det.scrollIntoView({behavior:"smooth",block:"center"});}
+      });
+    }
+  }
+
+  function escapeHtml(s){
+    return String(s).replace(/[&<>"']/g,function(c){
+      return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c];
+    });
+  }
+
+  // ---- settings sheet ----
+  function openSettings(){
+    $("backdrop").classList.add("show");
+    $("sheet").classList.add("show");
+    renderCalibUI();
+    renderEditor();
+    renderBackupOut();
+  }
+  function closeSettingsFn(){
+    $("backdrop").classList.remove("show");
+    $("sheet").classList.remove("show");
+  }
+
+  function renderCalibUI(){
+    var w = currentWeekFromCalibration(data.calibration);
+    $("setWeek1").classList.toggle("active", w===1);
+    $("setWeek2").classList.toggle("active", w===2);
+    $("calibNote").textContent = "Сейчас по расчёту: неделя "+w+". Если это неверно — нажми правильную кнопку выше, и дальше приложение будет считать само.";
+  }
+
+  function renderEditor(){
+    $("editTab1").classList.toggle("active",state.editTab===1);
+    $("editTab2").classList.toggle("active",state.editTab===2);
+    var wrap=$("dayAccordions");
+    wrap.innerHTML="";
+    EDIT_DAYS.forEach(function(dNum){
+      var det=document.createElement("details");
+      det.className="day-acc";
+      det.setAttribute("data-day",dNum);
+      var items=data.schedule[state.editTab][dNum];
+      var summary=document.createElement("summary");
+      summary.innerHTML='<span>'+capitalize(DAY_NAMES[dNum])+'</span><span class="cnt">'+(items.length?items.length+" пар":"пусто")+'</span>';
+      det.appendChild(summary);
+      var body=document.createElement("div");
+      body.className="acc-body";
+      items.forEach(function(it,idx){
+        body.appendChild(buildEditRow(dNum,idx,it));
+      });
+      var addBtn=document.createElement("button");
+      addBtn.className="add-class-btn";
+      addBtn.textContent="Добавить пару";
+      addBtn.addEventListener("click",function(){
+        var list=data.schedule[state.editTab][dNum];
+        var slot=TIME_SLOTS[list.length]||{start:"",end:""};
+        list.push({start:slot.start,end:slot.end,subject:"",room:"",type:""});
+        save();
+        renderEditor();
+        var reopened=document.querySelector('.day-acc[data-day="'+dNum+'"]');
+        if(reopened) reopened.open=true;
+      });
+      body.appendChild(addBtn);
+      det.appendChild(body);
+      wrap.appendChild(det);
+    });
+  }
+
+  function buildEditRow(dNum, idx, item){
+    var w=document.createElement("div");
+    w.className="edit-row-wrap";
+
+    var rmBtn=document.createElement("button");
+    rmBtn.className="rm";
+    rmBtn.setAttribute("aria-label","Удалить");
+    rmBtn.innerHTML='<svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round"><path d="M18 6L6 18M6 6l12 12"/></svg>';
+    rmBtn.addEventListener("click",function(){
+      data.schedule[state.editTab][dNum].splice(idx,1);
+      save(); renderEditor(); refreshAfterEdit();
+      var reopened=document.querySelector('.day-acc[data-day="'+dNum+'"]');
+      if(reopened) reopened.open=true;
+    });
+    w.appendChild(rmBtn);
+
+    var row=document.createElement("div");
+    row.className="edit-row";
+
+    var startInp=document.createElement("input");
+    startInp.placeholder="12:00";
+    startInp.value=item.start||"";
+    startInp.addEventListener("input",function(){
+      data.schedule[state.editTab][dNum][idx].start=startInp.value;
+      save(); refreshAfterEdit();
+    });
+
+    var endInp=document.createElement("input");
+    endInp.placeholder="13:35";
+    endInp.value=item.end||"";
+    endInp.addEventListener("input",function(){
+      data.schedule[state.editTab][dNum][idx].end=endInp.value;
+      save(); refreshAfterEdit();
+    });
+
+    var subjInp=document.createElement("input");
+    subjInp.className="subject-input";
+    subjInp.placeholder="Предмет";
+    subjInp.value=item.subject||"";
+    subjInp.addEventListener("input",function(){
+      data.schedule[state.editTab][dNum][idx].subject=subjInp.value;
+      save(); refreshAfterEdit();
+    });
+
+    row.appendChild(startInp);
+    row.appendChild(endInp);
+    row.appendChild(subjInp);
+    w.appendChild(row);
+
+    var row2=document.createElement("div");
+    row2.className="edit-row-2";
+
+    var roomInp=document.createElement("input");
+    roomInp.placeholder="Аудитория";
+    roomInp.value=item.room||"";
+    roomInp.addEventListener("input",function(){
+      data.schedule[state.editTab][dNum][idx].room=roomInp.value;
+      save(); refreshAfterEdit();
+    });
+
+    var typeSel=document.createElement("select");
+    TYPE_OPTIONS.forEach(function(t){
+      var opt=document.createElement("option");
+      opt.value=t; opt.textContent=t||"Тип";
+      if((item.type||"")===t) opt.selected=true;
+      typeSel.appendChild(opt);
+    });
+    typeSel.addEventListener("change",function(){
+      data.schedule[state.editTab][dNum][idx].type=typeSel.value;
+      save(); refreshAfterEdit();
+    });
+
+    row2.appendChild(roomInp);
+    row2.appendChild(typeSel);
+    w.appendChild(row2);
+
+    return w;
+  }
+
+  function refreshAfterEdit(){
+    actualWeek=currentWeekFromCalibration(data.calibration);
+    renderClassList();
+    renderBackupOut();
+  }
+
+  function renderBackupOut(){
+    $("backupOut").value=JSON.stringify(data,null,2);
+  }
+
+  // ---- toast ----
+  var toastTimer=null;
+  function toast(msg){
+    var t=$("toast");
+    t.textContent=msg;
+    t.classList.add("show");
+    clearTimeout(toastTimer);
+    toastTimer=setTimeout(function(){t.classList.remove("show");},1800);
+  }
+
+  // ---- events ----
+  $("openSettings").addEventListener("click",openSettings);
+  $("closeSettings").addEventListener("click",closeSettingsFn);
+  $("backdrop").addEventListener("click",closeSettingsFn);
+
+  $("weekBadge").addEventListener("click",function(){
+    var badge=$("weekBadge");
+    badge.classList.remove("flip"); void badge.offsetWidth; badge.classList.add("flip");
+    state.viewingWeek = state.viewingWeek===1?2:1;
+    renderHero();
+    renderClassList();
+    renderStatusRow();
+  });
+
+  $("backToToday").addEventListener("click",function(){
+    state.viewingWeek=actualWeek;
+    state.selectedDay = todayDayNum===0?1:todayDayNum;
+    renderHero();
+    renderDayStrip();
+    renderClassList();
+    renderStatusRow();
+  });
+
+  $("setWeek1").addEventListener("click",function(){setCalibration(1);});
+  $("setWeek2").addEventListener("click",function(){setCalibration(2);});
+  function setCalibration(week){
+    data.calibration={date:todayISO(),week:week};
+    save();
+    actualWeek=currentWeekFromCalibration(data.calibration);
+    state.viewingWeek=actualWeek;
+    renderCalibUI();
+    renderHero();
+    renderClassList();
+    renderStatusRow();
+    toast("Отмечено: сейчас неделя "+week);
+  }
+
+  $("editTab1").addEventListener("click",function(){state.editTab=1;renderEditor();});
+  $("editTab2").addEventListener("click",function(){state.editTab=2;renderEditor();});
+
+  $("restoreDefault").addEventListener("click",function(){
+    if(!window.confirm("Заменить текущее расписание на исходное из файла? Твои изменения в нём потеряются.")) return;
+    data.schedule = JSON.parse(JSON.stringify(BAKED_SCHEDULE));
+    save();
+    actualWeek=currentWeekFromCalibration(data.calibration);
+    renderEditor();
+    renderAll();
+    renderBackupOut();
+    toast("Расписание восстановлено");
+  });
+
+  $("copyBackup").addEventListener("click",function(){
+    var ta=$("backupOut");
+    ta.removeAttribute("readonly");
+    ta.select();
+    ta.setSelectionRange(0,999999);
+    if(navigator.clipboard && navigator.clipboard.writeText){
+      navigator.clipboard.writeText(ta.value).then(function(){toast("Скопировано");}).catch(function(){
+        try{document.execCommand("copy");toast("Скопировано");}catch(e){toast("Не удалось скопировать");}
+      });
+    }else{
+      try{document.execCommand("copy");toast("Скопировано");}catch(e){toast("Не удалось скопировать");}
+    }
+    ta.setAttribute("readonly","readonly");
+  });
+
+  $("importBackup").addEventListener("click",function(){
+    var raw=$("backupIn").value.trim();
+    if(!raw){toast("Вставь текст резервной копии");return;}
+    try{
+      var parsed=JSON.parse(raw);
+      if(!parsed.schedule||!parsed.calibration) throw new Error("bad shape");
+      data=migrateData(parsed);
+      save();
+      actualWeek=currentWeekFromCalibration(data.calibration);
+      state.viewingWeek=actualWeek;
+      state.editTab=actualWeek;
+      renderAll();
+      renderCalibUI(); renderEditor(); renderBackupOut();
+      $("backupIn").value="";
+      toast("Импортировано");
+    }catch(e){
+      toast("Не похоже на корректную копию");
+    }
+  });
+
+  function renderAll(){
+    renderHero();
+    renderDayStrip();
+    renderClassList();
+    renderStatusRow();
+  }
+
+  renderAll();
+  if(isFirstRun){
+    setTimeout(function(){
+      openSettings();
+      toast("Расписание уже внутри — отметь только текущую неделю");
+    },350);
+  }
+
+  if("serviceWorker" in navigator && (location.protocol==="https:"||location.protocol==="http:")){
+    navigator.serviceWorker.register("sw.js").catch(function(){});
+  }
+})();
+</script>
+</body>
+</html>
